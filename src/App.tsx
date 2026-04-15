@@ -33,6 +33,8 @@ export default function App() {
   const [story, setStory] = useState("");
   const [project, setProject] = useState<VideoProject | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isBuffering, setIsBuffering] = useState(false);
+  const [bufferProgress, setBufferProgress] = useState(0);
   const [currentSceneIndex, setCurrentSceneIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
@@ -41,14 +43,45 @@ export default function App() {
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
+  const preloadImages = async (scenes: Scene[]) => {
+    setIsBuffering(true);
+    setBufferProgress(0);
+    let loadedCount = 0;
+
+    const promises = scenes.map((scene) => {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.src = scene.image_url;
+        img.onload = () => {
+          loadedCount++;
+          setBufferProgress(Math.round((loadedCount / scenes.length) * 100));
+          resolve(true);
+        };
+        img.onerror = () => {
+          loadedCount++;
+          setBufferProgress(Math.round((loadedCount / scenes.length) * 100));
+          resolve(false); // Resolve anyway to not block the whole process
+        };
+      });
+    });
+
+    await Promise.all(promises);
+    setIsBuffering(false);
+  };
+
   const handleGenerate = async () => {
     if (!story.trim()) return;
     setIsGenerating(true);
+    setIsBuffering(false);
     setError(null);
     try {
       const result = await generateVideoProject(story);
       setProject(result);
       setCurrentSceneIndex(0);
+      
+      // Preload images before starting playback
+      await preloadImages(result.scenes);
+      
       setIsPlaying(true);
       setActiveTab("player");
     } catch (err) {
@@ -143,6 +176,20 @@ export default function App() {
             <div className="flex-1 relative overflow-hidden">
               <TabsContent value="player" className="absolute inset-0 m-0 flex flex-col p-6">
                 <div className="flex-1 relative rounded-xl border border-surface-accent bg-black overflow-hidden shadow-2xl group">
+                  {isBuffering && (
+                    <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center gap-4">
+                      <div className="relative w-16 h-16">
+                        <Loader2 className="w-16 h-16 text-primary animate-spin" />
+                        <div className="absolute inset-0 flex items-center justify-center text-[10px] font-mono text-primary">
+                          {bufferProgress}%
+                        </div>
+                      </div>
+                      <div className="text-center space-y-1">
+                        <p className="text-[10px] uppercase tracking-[3px] text-primary">Buffering Assets</p>
+                        <p className="text-[8px] font-mono text-text-dim">OPTIMIZING_PIPELINE // PRE-LOADING_FRAMES</p>
+                      </div>
+                    </div>
+                  )}
                   {project ? (
                     <>
                       <AnimatePresence mode="wait">
