@@ -1,7 +1,4 @@
-import { GoogleGenAI, Type } from "@google/genai";
 import { VideoProject } from "../types";
-
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 const SYSTEM_PROMPT = `You are the "Xantrail Video Engine" Director. Your job is to take a story input from the user and convert it into a strictly structured JSON format that drives a video production pipeline.
 
@@ -30,48 +27,37 @@ const SYSTEM_PROMPT = `You are the "Xantrail Video Engine" Director. Your job is
 ### CRITICAL INSTRUCTIONS:
 - For [encoded_description] and [encoded_voiceover_text], you MUST replace spaces with %20 and ensure other special characters are URL-safe.
 - Ensure the image_description is vivid and artistic (e.g., 'Cinematic lighting, 8k, Unreal Engine 5 style, hyper-realistic, masterpiece').
-- Keep the voiceover_text short enough to be spoken in exactly 3 seconds (about 10-12 words max).`;
+- Keep the voiceover_text short enough to be spoken in exactly 3 seconds (about 10-12 words max).
+- DO NOT include any markdown formatting like \`\`\`json or \`\`\`. Just raw JSON.`;
 
 export async function generateVideoProject(story: string): Promise<VideoProject> {
-  const response = await ai.models.generateContent({
-    model: "gemini-3.1-pro-preview",
-    contents: `Story: ${story}`,
-    config: {
-      systemInstruction: SYSTEM_PROMPT,
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          project_title: { type: Type.STRING },
-          total_scenes: { type: Type.NUMBER },
-          scenes: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                scene_id: { type: Type.NUMBER },
-                image_description: { type: Type.STRING },
-                image_url: { type: Type.STRING },
-                voiceover_text: { type: Type.STRING },
-                voiceover_audio_url: { type: Type.STRING },
-                duration_seconds: { type: Type.NUMBER },
-              },
-              required: ["scene_id", "image_description", "image_url", "voiceover_text", "voiceover_audio_url", "duration_seconds"],
-            },
-          },
-        },
-        required: ["project_title", "total_scenes", "scenes"],
-      },
+  const response = await fetch("https://text.pollinations.ai/", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
     },
+    body: JSON.stringify({
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: `Story: ${story}` }
+      ],
+      model: "openai", // Using the OpenAI model via Pollinations for high-quality JSON
+      jsonMode: true
+    }),
   });
 
-  const text = response.text;
-  if (!text) throw new Error("No response from Gemini");
+  if (!response.ok) {
+    throw new Error(`Pollinations API error: ${response.statusText}`);
+  }
+
+  const text = await response.text();
   
   try {
-    const project = JSON.parse(text) as VideoProject;
+    // Pollinations sometimes returns markdown blocks even when asked not to
+    const cleanJson = text.replace(/```json|```/g, "").trim();
+    const project = JSON.parse(cleanJson) as VideoProject;
     
-    // Post-process to ensure URLs are correctly encoded if the AI missed it
+    // Post-process to ensure URLs are correctly encoded
     project.scenes = project.scenes.map(scene => {
       const encodedDesc = encodeURIComponent(scene.image_description);
       const encodedVO = encodeURIComponent(scene.voiceover_text);
@@ -85,7 +71,7 @@ export async function generateVideoProject(story: string): Promise<VideoProject>
 
     return project;
   } catch (e) {
-    console.error("Failed to parse JSON:", text);
-    throw new Error("Invalid JSON response from AI engine. Please try again.");
+    console.error("Failed to parse JSON from Pollinations:", text);
+    throw new Error("The AI engine returned an invalid response format. Please try again.");
   }
 }

@@ -23,7 +23,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { generateVideoProject } from "./lib/gemini";
+import { generateVideoProject } from "./lib/pollinations";
 import { VideoProject, Scene } from "./types";
 import { cn } from "@/lib/utils";
 
@@ -108,7 +108,7 @@ export default function App() {
           <h1 className="font-display font-extrabold text-sm tracking-[2px] uppercase text-primary">XANTRAIL VIDEO ENGINE</h1>
         </div>
         <div className="text-[10px] font-mono text-text-dim uppercase tracking-wider">
-          PROJECT_ID: <span className="text-primary">XVE-409-NEON</span> &nbsp; | &nbsp; STATUS: <span className="text-[#00ff41]">ENGINE READY</span>
+          ENGINE: <span className="text-primary">POLLINATIONS AI</span> &nbsp; | &nbsp; STATUS: <span className="text-[#00ff41]">READY</span>
         </div>
       </header>
 
