@@ -92,7 +92,8 @@ export default function App() {
   const handleGenerate = async () => {
     if (!story.trim()) return;
     setIsGenerating(true);
-    setIsBuffering(false);
+    setIsBuffering(true);
+    setBufferProgress(0);
     setError(null);
     try {
       const result = await generateVideoProject(story);
@@ -106,6 +107,7 @@ export default function App() {
       setActiveTab("player");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to generate project");
+      setIsBuffering(false);
     } finally {
       setIsGenerating(false);
     }
@@ -196,18 +198,24 @@ export default function App() {
             <div className="flex-1 relative overflow-hidden">
               <TabsContent value="player" className="absolute inset-0 m-0 flex flex-col p-6">
                 <div className="flex-1 relative rounded-xl border border-surface-accent bg-black overflow-hidden shadow-2xl group">
-                  {isBuffering && (
+                  {(isBuffering || isGenerating) && (
                     <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center gap-4">
                       <div className="relative w-20 h-20 flex items-center justify-center">
                         <img src="/Zyntros_logo.png" alt="Zyntros" className="w-12 h-12 absolute animate-pulse" referrerPolicy="no-referrer" />
                         <Loader2 className="w-20 h-20 text-primary animate-spin opacity-30" />
-                        <div className="absolute inset-0 flex items-center justify-center text-[10px] font-mono text-primary mt-16">
-                          {bufferProgress}%
-                        </div>
+                        {isBuffering && (
+                          <div className="absolute inset-0 flex items-center justify-center text-[10px] font-mono text-primary mt-16">
+                            {bufferProgress}%
+                          </div>
+                        )}
                       </div>
                       <div className="text-center space-y-1">
-                        <p className="text-[10px] uppercase tracking-[3px] text-primary">NOT READY YET</p>
-                        <p className="text-[8px] font-mono text-text-dim">BUFFERING_ASSETS // RETRYING_ON_LIMITS</p>
+                        <p className="text-[10px] uppercase tracking-[3px] text-primary">
+                          {isGenerating ? "Generating Narrative" : "NOT READY YET"}
+                        </p>
+                        <p className="text-[8px] font-mono text-text-dim">
+                          {isGenerating ? "SYNTHESIZING_SCENES // AI_DIRECTOR_ACTIVE" : "BUFFERING_ASSETS // RETRYING_ON_LIMITS"}
+                        </p>
                       </div>
                     </div>
                   )}
@@ -380,8 +388,8 @@ export default function App() {
           muted={isMuted}
           crossOrigin="anonymous"
           onEnded={nextScene}
-          onError={(e) => {
-            console.error("Audio playback error:", e);
+          onError={() => {
+            console.error("Audio playback error");
             // Fallback to timer if audio fails
             setTimeout(nextScene, 3000);
           }}
