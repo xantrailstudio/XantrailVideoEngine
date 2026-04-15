@@ -32,10 +32,11 @@ If you include any text other than the JSON object, the system will fail. Start 
 export async function generateVideoProject(story: string): Promise<VideoProject> {
   const projectSeed = Math.floor(Math.random() * 1000000);
   
-  const response = await fetch("/api/pollinations", {
+  const response = await fetch("https://text.pollinations.ai/", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      "Authorization": `Bearer ${process.env.NEXT_PUBLIC_POLLINATIONS_API_KEY}`
     },
     body: JSON.stringify({
       messages: [
@@ -61,7 +62,6 @@ export async function generateVideoProject(story: string): Promise<VideoProject>
     } else if (parsedResponse.choices?.[0]?.message?.content) {
       jsonString = parsedResponse.choices[0].message.content;
     } else if (parsedResponse.reasoning_content && !parsedResponse.content) {
-      // If the model put everything in reasoning_content
       jsonString = parsedResponse.reasoning_content;
     }
   } catch (e) {
@@ -69,20 +69,17 @@ export async function generateVideoProject(story: string): Promise<VideoProject>
   }
 
   try {
-    // Advanced JSON extraction: find the block containing project_title
     let cleanJson = jsonString;
     const firstBrace = jsonString.indexOf('{');
     const lastBrace = jsonString.lastIndexOf('}');
     
     if (firstBrace !== -1 && lastBrace !== -1) {
-      // Try to find a block that specifically contains our required keys
       const potentialBlocks = [];
       let searchPos = 0;
       while (true) {
         const start = jsonString.indexOf('{', searchPos);
         if (start === -1) break;
         
-        // Find matching closing brace
         let depth = 0;
         let end = -1;
         for (let i = start; i < jsonString.length; i++) {
@@ -121,8 +118,8 @@ export async function generateVideoProject(story: string): Promise<VideoProject>
       
       return {
         ...scene,
-        image_url: `/api/image?prompt=${encodedDesc}&width=1280&height=720&model=flux&seed=${projectSeed}&nologo=true`,
-        voiceover_audio_url: `/api/audio/${encodedVO}`,
+        image_url: `https://image.pollinations.ai/prompt/${encodedDesc}?width=1280&height=720&model=flux&seed=${projectSeed}&nologo=true`,
+        voiceover_audio_url: `https://text.pollinations.ai/audio/${encodedVO}`,
         duration_seconds: scene.duration_seconds || 3
       };
     });

@@ -1,9 +1,6 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
+"use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   Play, 
@@ -16,17 +13,15 @@ import {
   Sparkles,
   Volume2,
   VolumeX,
-  Download,
   Code,
   MonitorPlay
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { generateVideoProject } from "./lib/pollinations";
-import { VideoProject, Scene } from "./types";
+import { generateVideoProject } from "@/lib/pollinations";
+import { VideoProject, Scene } from "@/types";
 import { cn } from "@/lib/utils";
 
 export default function App() {
@@ -77,13 +72,12 @@ export default function App() {
       return false;
     };
 
-    // Load images and audio sequentially with small delay to avoid 429
     for (const scene of scenes) {
       await loadWithRetry(scene.image_url, 'image');
       await loadWithRetry(scene.voiceover_audio_url, 'audio');
       loadedCount++;
       setBufferProgress(Math.round((loadedCount / scenes.length) * 100));
-      await delay(200); // Small gap between scenes
+      await delay(200);
     }
 
     setIsBuffering(false);
@@ -100,7 +94,6 @@ export default function App() {
       setProject(result);
       setCurrentSceneIndex(0);
       
-      // Preload assets before starting playback
       await preloadAssets(result.scenes);
       
       setIsPlaying(true);
@@ -133,33 +126,33 @@ export default function App() {
   return (
     <div className="h-screen flex flex-col bg-bg-deep text-text-main font-sans overflow-hidden">
       {/* Header */}
-      <header className="h-[60px] px-6 flex items-center justify-between border-b border-surface-accent bg-gradient-to-r from-surface to-bg-deep shrink-0">
+      <header className="h-[60px] px-4 md:px-6 flex items-center justify-between border-b border-surface-accent bg-gradient-to-r from-surface to-bg-deep shrink-0">
         <div className="flex items-center gap-3">
           <img src="/Zyntros_logo.png" alt="Zyntros Logo" className="w-8 h-8 object-contain" referrerPolicy="no-referrer" />
-          <h1 className="font-display font-extrabold text-sm tracking-[2px] uppercase text-primary">ZYNTROS</h1>
+          <h1 className="font-display font-extrabold text-xs md:text-sm tracking-[2px] uppercase text-primary">ZYNTROS</h1>
         </div>
-        <div className="text-[10px] font-mono text-text-dim uppercase tracking-wider">
+        <div className="hidden md:block text-[10px] font-mono text-text-dim uppercase tracking-wider">
           ENGINE: <span className="text-primary">POLLINATIONS AI</span> &nbsp; | &nbsp; STATUS: <span className="text-[#00ff41]">READY</span>
         </div>
       </header>
 
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
         {/* TOP LEFT: Short Sidebar */}
-        <aside className="w-[320px] border-r border-surface-accent bg-bg-deep p-6 flex flex-col gap-4 shrink-0">
+        <aside className="w-full md:w-[320px] border-b md:border-b-0 md:border-r border-surface-accent bg-bg-deep p-4 md:p-6 flex flex-col gap-4 shrink-0 max-h-[40%] md:max-h-none">
           <div className="flex items-center justify-between">
             <div className="text-[10px] uppercase tracking-[1.5px] text-text-dim">Narrative Input</div>
             <Sparkles className="w-3 h-3 text-primary opacity-50" />
           </div>
           <Textarea
             placeholder="Enter your story narrative..."
-            className="flex-1 bg-surface border-surface-accent border rounded-lg p-4 text-sm leading-relaxed resize-none focus-visible:ring-1 focus-visible:ring-primary focus-visible:border-primary transition-all glow-primary"
+            className="flex-1 bg-surface border-surface-accent border rounded-lg p-3 md:p-4 text-sm leading-relaxed resize-none focus-visible:ring-1 focus-visible:ring-primary focus-visible:border-primary transition-all glow-primary"
             value={story}
             onChange={(e) => setStory(e.target.value)}
           />
           <Button 
             onClick={handleGenerate} 
             disabled={isGenerating || !story.trim()}
-            className="bg-primary hover:bg-primary/80 text-bg-deep font-bold text-[12px] uppercase tracking-wider h-12 rounded shadow-[0_0_15px_var(--color-primary)] transition-all active:scale-95"
+            className="bg-primary hover:bg-primary/80 text-bg-deep font-bold text-[12px] uppercase tracking-wider h-10 md:h-12 rounded shadow-[0_0_15px_var(--color-primary)] transition-all active:scale-95"
           >
             {isGenerating ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -252,7 +245,7 @@ export default function App() {
                             key={currentSceneIndex}
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
-                            className="text-xl font-serif italic text-text-main max-w-2xl leading-relaxed drop-shadow-lg"
+                            className="text-base md:text-xl font-serif italic text-text-main max-w-2xl leading-relaxed drop-shadow-lg"
                           >
                             "{currentScene?.voiceover_text}"
                           </motion.p>
@@ -326,13 +319,13 @@ export default function App() {
       </div>
 
       {/* BOTTOM: Timeline */}
-      <footer className="h-[200px] bg-surface border-t border-surface-accent p-5 shrink-0 overflow-hidden">
-        <div className="flex items-center justify-between mb-4">
+      <footer className="h-[180px] md:h-[200px] bg-surface border-t border-surface-accent p-4 md:p-5 shrink-0 overflow-hidden">
+        <div className="flex items-center justify-between mb-3 md:mb-4">
           <div className="text-[10px] uppercase tracking-[1.5px] text-text-dim">Production Timeline</div>
-          {project && <div className="text-[9px] font-mono text-text-dim uppercase">Visual Anchor: <span className="text-primary">{project.visual_anchor}</span></div>}
+          {project && <div className="hidden md:block text-[9px] font-mono text-text-dim uppercase">Visual Anchor: <span className="text-primary">{project.visual_anchor}</span></div>}
         </div>
         <ScrollArea className="w-full">
-          <div className="flex gap-4 pb-4">
+          <div className="flex gap-4 pb-4 flex-nowrap overflow-x-auto">
             {project ? (
               project.scenes.map((scene, idx) => (
                 <button
@@ -387,10 +380,10 @@ export default function App() {
           autoPlay
           muted={isMuted}
           crossOrigin="anonymous"
-          onEnded={nextScene}
+          playsInline
+          onEnded={() => nextScene()}
           onError={() => {
             console.error("Audio playback error");
-            // Fallback to timer if audio fails
             setTimeout(nextScene, 3000);
           }}
         />
