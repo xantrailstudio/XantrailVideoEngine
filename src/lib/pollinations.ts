@@ -32,7 +32,7 @@ If you include any text other than the JSON object, the system will fail. Start 
 export async function generateVideoProject(story: string): Promise<VideoProject> {
   const projectSeed = Math.floor(Math.random() * 1000000);
   
-  const response = await fetch("https://text.pollinations.ai/", {
+  const response = await fetch("/api/pollinations", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -122,7 +122,7 @@ export async function generateVideoProject(story: string): Promise<VideoProject>
       return {
         ...scene,
         image_url: `https://image.pollinations.ai/prompt/${encodedDesc}?width=1280&height=720&model=flux&seed=${projectSeed}&nologo=true`,
-        voiceover_audio_url: `https://text.pollinations.ai/audio/${encodedVO}`,
+        voiceover_audio_url: `/api/audio/${encodedVO}`,
         duration_seconds: scene.duration_seconds || 3
       };
     });

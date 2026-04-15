@@ -133,7 +133,7 @@ export default function App() {
       {/* Header */}
       <header className="h-[60px] px-6 flex items-center justify-between border-b border-surface-accent bg-gradient-to-r from-surface to-bg-deep shrink-0">
         <div className="flex items-center gap-3">
-          <div className="relative w-6 h-6 border-2 border-primary rounded-[4px] after:content-[''] after:absolute after:top-1/2 after:left-1/2 after:-translate-x-1/2 after:-translate-y-1/2 after:w-2 after:h-2 after:bg-primary after:shadow-[0_0_10px_var(--color-primary)]" />
+          <img src="/Zyntros_logo.png" alt="Zyntros Logo" className="w-8 h-8 object-contain" referrerPolicy="no-referrer" />
           <h1 className="font-display font-extrabold text-sm tracking-[2px] uppercase text-primary">ZYNTROS</h1>
         </div>
         <div className="text-[10px] font-mono text-text-dim uppercase tracking-wider">
@@ -198,9 +198,10 @@ export default function App() {
                 <div className="flex-1 relative rounded-xl border border-surface-accent bg-black overflow-hidden shadow-2xl group">
                   {isBuffering && (
                     <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center gap-4">
-                      <div className="relative w-16 h-16">
-                        <Loader2 className="w-16 h-16 text-primary animate-spin" />
-                        <div className="absolute inset-0 flex items-center justify-center text-[10px] font-mono text-primary">
+                      <div className="relative w-20 h-20 flex items-center justify-center">
+                        <img src="/Zyntros_logo.png" alt="Zyntros" className="w-12 h-12 absolute animate-pulse" referrerPolicy="no-referrer" />
+                        <Loader2 className="w-20 h-20 text-primary animate-spin opacity-30" />
+                        <div className="absolute inset-0 flex items-center justify-center text-[10px] font-mono text-primary mt-16">
                           {bufferProgress}%
                         </div>
                       </div>
