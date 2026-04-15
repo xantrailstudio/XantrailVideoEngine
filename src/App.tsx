@@ -43,29 +43,49 @@ export default function App() {
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  const preloadImages = async (scenes: Scene[]) => {
+  const preloadAssets = async (scenes: Scene[]) => {
     setIsBuffering(true);
     setBufferProgress(0);
     let loadedCount = 0;
 
-    const promises = scenes.map((scene) => {
-      return new Promise((resolve) => {
-        const img = new Image();
-        img.src = scene.image_url;
-        img.onload = () => {
-          loadedCount++;
-          setBufferProgress(Math.round((loadedCount / scenes.length) * 100));
-          resolve(true);
-        };
-        img.onerror = () => {
-          loadedCount++;
-          setBufferProgress(Math.round((loadedCount / scenes.length) * 100));
-          resolve(false); // Resolve anyway to not block the whole process
-        };
-      });
-    });
+    const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-    await Promise.all(promises);
+    const loadWithRetry = async (url: string, type: 'image' | 'audio', retries = 3): Promise<boolean> => {
+      for (let i = 0; i < retries; i++) {
+        try {
+          if (type === 'image') {
+            await new Promise((resolve, reject) => {
+              const img = new Image();
+              img.src = url;
+              img.onload = resolve;
+              img.onerror = reject;
+            });
+          } else {
+            await new Promise((resolve, reject) => {
+              const audio = new Audio();
+              audio.src = url;
+              audio.oncanplaythrough = resolve;
+              audio.onerror = reject;
+            });
+          }
+          return true;
+        } catch (err) {
+          if (i === retries - 1) return false;
+          await delay(1000 * (i + 1)); // Exponential backoff
+        }
+      }
+      return false;
+    };
+
+    // Load images and audio sequentially with small delay to avoid 429
+    for (const scene of scenes) {
+      await loadWithRetry(scene.image_url, 'image');
+      await loadWithRetry(scene.voiceover_audio_url, 'audio');
+      loadedCount++;
+      setBufferProgress(Math.round((loadedCount / scenes.length) * 100));
+      await delay(200); // Small gap between scenes
+    }
+
     setIsBuffering(false);
   };
 
@@ -79,8 +99,8 @@ export default function App() {
       setProject(result);
       setCurrentSceneIndex(0);
       
-      // Preload images before starting playback
-      await preloadImages(result.scenes);
+      // Preload assets before starting playback
+      await preloadAssets(result.scenes);
       
       setIsPlaying(true);
       setActiveTab("player");
@@ -114,7 +134,7 @@ export default function App() {
       <header className="h-[60px] px-6 flex items-center justify-between border-b border-surface-accent bg-gradient-to-r from-surface to-bg-deep shrink-0">
         <div className="flex items-center gap-3">
           <div className="relative w-6 h-6 border-2 border-primary rounded-[4px] after:content-[''] after:absolute after:top-1/2 after:left-1/2 after:-translate-x-1/2 after:-translate-y-1/2 after:w-2 after:h-2 after:bg-primary after:shadow-[0_0_10px_var(--color-primary)]" />
-          <h1 className="font-display font-extrabold text-sm tracking-[2px] uppercase text-primary">XANTRAIL VIDEO ENGINE</h1>
+          <h1 className="font-display font-extrabold text-sm tracking-[2px] uppercase text-primary">ZYNTROS</h1>
         </div>
         <div className="text-[10px] font-mono text-text-dim uppercase tracking-wider">
           ENGINE: <span className="text-primary">POLLINATIONS AI</span> &nbsp; | &nbsp; STATUS: <span className="text-[#00ff41]">READY</span>
@@ -185,8 +205,8 @@ export default function App() {
                         </div>
                       </div>
                       <div className="text-center space-y-1">
-                        <p className="text-[10px] uppercase tracking-[3px] text-primary">Buffering Assets</p>
-                        <p className="text-[8px] font-mono text-text-dim">OPTIMIZING_PIPELINE // PRE-LOADING_FRAMES</p>
+                        <p className="text-[10px] uppercase tracking-[3px] text-primary">NOT READY YET</p>
+                        <p className="text-[8px] font-mono text-text-dim">BUFFERING_ASSETS // RETRYING_ON_LIMITS</p>
                       </div>
                     </div>
                   )}

@@ -1,6 +1,6 @@
 import { VideoProject } from "../types";
 
-const SYSTEM_PROMPT = `You are the "Xantrail Video Engine" Director. Your job is to take a story input from the user and convert it into a strictly structured JSON format that drives a video production pipeline.
+const SYSTEM_PROMPT = `You are the "Zyntros" Director. Your job is to take a story input from the user and convert it into a strictly structured JSON format that drives a video production pipeline.
 
 ### YOUR RULES:
 1. OUTPUT ONLY JSON. No conversational text, no markdown code blocks.
