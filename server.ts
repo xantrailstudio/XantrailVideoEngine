@@ -70,6 +70,38 @@ async function startServer() {
     }
   });
 
+  // API Proxy for Pollinations Images (to use API Key and avoid limits)
+  app.get("/api/image", async (req, res) => {
+    const apiKey = process.env.POLLINATIONS_API_KEY;
+    const { prompt, width, height, model, seed, nologo } = req.query;
+
+    try {
+      const url = new URL(`https://image.pollinations.ai/prompt/${prompt}`);
+      if (width) url.searchParams.set("width", width as string);
+      if (height) url.searchParams.set("height", height as string);
+      if (model) url.searchParams.set("model", model as string);
+      if (seed) url.searchParams.set("seed", seed as string);
+      if (nologo) url.searchParams.set("nologo", nologo as string);
+
+      const response = await fetch(url.toString(), {
+        headers: apiKey ? { "Authorization": `Bearer ${apiKey}` } : {}
+      });
+
+      if (!response.ok) {
+        return res.status(response.status).send("Image proxy failed");
+      }
+
+      const contentType = response.headers.get("content-type") || "image/jpeg";
+      res.setHeader("Content-Type", contentType);
+      
+      const arrayBuffer = await response.arrayBuffer();
+      res.send(Buffer.from(arrayBuffer));
+    } catch (error) {
+      console.error("Image proxy error:", error);
+      res.status(500).send("Internal server error proxying image");
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
