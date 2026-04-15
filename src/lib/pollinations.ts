@@ -3,34 +3,35 @@ import { VideoProject } from "../types";
 const SYSTEM_PROMPT = `You are the "Xantrail Video Engine" Director. Your job is to take a story input from the user and convert it into a strictly structured JSON format that drives a video production pipeline.
 
 ### YOUR RULES:
-1. OUTPUT ONLY JSON. No conversational text, no "Here is your story," and no markdown code blocks.
-2. BREAK THE STORY into 3-second scenes. 
-3. Each scene must have a visual description (for Flux) and a narration script.
-4. Use the following Pollinations.ai URL patterns to generate direct links for the assets.
+1. OUTPUT ONLY JSON. No conversational text, no markdown code blocks.
+2. BREAK THE STORY into logical scenes.
+3. VISUAL ANCHOR SYSTEM: 
+   - First, define a "visual_anchor" string that describes the main character's consistent appearance (e.g., "A young woman with neon blue bob hair, wearing a silver reflective jacket and a glowing visor").
+   - Every "image_description" in the "scenes" array MUST start with this visual anchor to maintain character consistency.
+4. Each scene must have a vivid visual description and a narration script.
 
 ### THE JSON STRUCTURE:
 {
   "project_title": "String",
+  "visual_anchor": "String describing consistent character traits",
   "total_scenes": Number,
   "scenes": [
     {
       "scene_id": 1,
-      "image_description": "A highly detailed cinematic prompt for Flux model",
-      "image_url": "https://image.pollinations.ai/prompt/[encoded_description]?width=1280&height=720&model=flux&nologo=true",
-      "voiceover_text": "The 3-second narration script",
-      "voiceover_audio_url": "https://text.pollinations.ai/audio/[encoded_voiceover_text]",
+      "image_description": "Visual Anchor + specific scene action/setting",
+      "voiceover_text": "The narration script",
       "duration_seconds": 3
     }
   ]
 }
 
 ### CRITICAL INSTRUCTIONS:
-- For [encoded_description] and [encoded_voiceover_text], you MUST replace spaces with %20 and ensure other special characters are URL-safe.
-- Ensure the image_description is vivid and artistic (e.g., 'Cinematic lighting, 8k, Unreal Engine 5 style, hyper-realistic, masterpiece').
-- Keep the voiceover_text short enough to be spoken in exactly 3 seconds (about 10-12 words max).
-- DO NOT include any markdown formatting like \`\`\`json or \`\`\`. Just raw JSON.`;
+- Keep the voiceover_text short enough to be spoken clearly (about 10-15 words).
+- DO NOT include any markdown formatting like \`\`\`json. Just raw JSON.`;
 
 export async function generateVideoProject(story: string): Promise<VideoProject> {
+  const projectSeed = Math.floor(Math.random() * 1000000);
+  
   const response = await fetch("https://text.pollinations.ai/", {
     method: "POST",
     headers: {
@@ -41,7 +42,7 @@ export async function generateVideoProject(story: string): Promise<VideoProject>
         { role: "system", content: SYSTEM_PROMPT },
         { role: "user", content: `Story: ${story}` }
       ],
-      model: "openai", // Using the OpenAI model via Pollinations for high-quality JSON
+      model: "openai",
       jsonMode: true
     }),
   });
@@ -53,19 +54,22 @@ export async function generateVideoProject(story: string): Promise<VideoProject>
   const text = await response.text();
   
   try {
-    // Pollinations sometimes returns markdown blocks even when asked not to
     const cleanJson = text.replace(/```json|```/g, "").trim();
     const project = JSON.parse(cleanJson) as VideoProject;
     
-    // Post-process to ensure URLs are correctly encoded
+    project.seed = projectSeed;
+
+    // Post-process to ensure URLs are correctly encoded and include the seed
     project.scenes = project.scenes.map(scene => {
-      const encodedDesc = encodeURIComponent(scene.image_description);
+      const fullPrompt = `${scene.image_description}, cinematic lighting, 8k, hyper-realistic`;
+      const encodedDesc = encodeURIComponent(fullPrompt);
       const encodedVO = encodeURIComponent(scene.voiceover_text);
       
       return {
         ...scene,
-        image_url: `https://image.pollinations.ai/prompt/${encodedDesc}?width=1280&height=720&model=flux&nologo=true`,
-        voiceover_audio_url: `https://text.pollinations.ai/audio/${encodedVO}`
+        image_url: `https://image.pollinations.ai/prompt/${encodedDesc}?width=1280&height=720&model=flux&seed=${projectSeed}&nologo=true`,
+        voiceover_audio_url: `https://text.pollinations.ai/audio/${encodedVO}`,
+        duration_seconds: scene.duration_seconds || 3
       };
     });
 

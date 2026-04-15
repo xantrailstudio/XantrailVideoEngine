@@ -16,13 +16,15 @@ import {
   Sparkles,
   Volume2,
   VolumeX,
-  Download
+  Download,
+  Code,
+  MonitorPlay
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { generateVideoProject } from "./lib/pollinations";
 import { VideoProject, Scene } from "./types";
 import { cn } from "@/lib/utils";
@@ -34,11 +36,10 @@ export default function App() {
   const [currentSceneIndex, setCurrentSceneIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
-  const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState("player");
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   const handleGenerate = async () => {
     if (!story.trim()) return;
@@ -49,6 +50,7 @@ export default function App() {
       setProject(result);
       setCurrentSceneIndex(0);
       setIsPlaying(true);
+      setActiveTab("player");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to generate project");
     } finally {
@@ -60,42 +62,16 @@ export default function App() {
     if (!project) return;
     if (currentSceneIndex < project.scenes.length - 1) {
       setCurrentSceneIndex(prev => prev + 1);
-      setProgress(0);
     } else {
       setIsPlaying(false);
-      setProgress(100);
     }
   };
 
   const prevScene = () => {
     if (currentSceneIndex > 0) {
       setCurrentSceneIndex(prev => prev - 1);
-      setProgress(0);
     }
   };
-
-  useEffect(() => {
-    if (isPlaying && project) {
-      const duration = project.scenes[currentSceneIndex].duration_seconds * 1000;
-      const interval = 50;
-      const step = (interval / duration) * 100;
-
-      timerRef.current = setInterval(() => {
-        setProgress(prev => {
-          if (prev >= 100) {
-            clearInterval(timerRef.current!);
-            nextScene();
-            return 100;
-          }
-          return prev + step;
-        });
-      }, interval);
-
-      return () => {
-        if (timerRef.current) clearInterval(timerRef.current);
-      };
-    }
-  }, [isPlaying, currentSceneIndex, project]);
 
   const currentScene = project?.scenes[currentSceneIndex];
 
@@ -112,12 +88,15 @@ export default function App() {
         </div>
       </header>
 
-      <main className="flex-1 grid grid-cols-[320px_1fr] gap-[1px] bg-surface-accent overflow-hidden">
-        {/* Left Pane: Input */}
-        <section className="bg-bg-deep p-6 flex flex-col gap-4 overflow-hidden">
-          <div className="text-[10px] uppercase tracking-[1.5px] text-text-dim">Source Narrative</div>
+      <div className="flex-1 flex overflow-hidden">
+        {/* TOP LEFT: Short Sidebar */}
+        <aside className="w-[320px] border-r border-surface-accent bg-bg-deep p-6 flex flex-col gap-4 shrink-0">
+          <div className="flex items-center justify-between">
+            <div className="text-[10px] uppercase tracking-[1.5px] text-text-dim">Narrative Input</div>
+            <Sparkles className="w-3 h-3 text-primary opacity-50" />
+          </div>
           <Textarea
-            placeholder="Enter your story here..."
+            placeholder="Enter your story narrative..."
             className="flex-1 bg-surface border-surface-accent border rounded-lg p-4 text-sm leading-relaxed resize-none focus-visible:ring-1 focus-visible:ring-primary focus-visible:border-primary transition-all glow-primary"
             value={story}
             onChange={(e) => setStory(e.target.value)}
@@ -125,141 +104,197 @@ export default function App() {
           <Button 
             onClick={handleGenerate} 
             disabled={isGenerating || !story.trim()}
-            className="bg-primary hover:bg-primary/80 text-bg-deep font-bold text-[12px] uppercase tracking-wider h-10 rounded shadow-[0_0_15px_var(--color-primary)] transition-all active:scale-95"
+            className="bg-primary hover:bg-primary/80 text-bg-deep font-bold text-[12px] uppercase tracking-wider h-12 rounded shadow-[0_0_15px_var(--color-primary)] transition-all active:scale-95"
           >
             {isGenerating ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
-              "Generate JSON Script"
+              "Initialize Engine"
             )}
           </Button>
-          {error && <p className="text-red-500 text-[10px] font-mono">{error}</p>}
-        </section>
+          {error && <p className="text-red-500 text-[10px] font-mono bg-red-500/10 p-2 rounded border border-red-500/20">{error}</p>}
+        </aside>
 
-        {/* Right Pane: Output/Player */}
-        <section className="bg-[#08080a] flex flex-col relative overflow-hidden">
+        {/* TOP RIGHT: Main Stage */}
+        <main className="flex-1 bg-[#08080a] relative overflow-hidden flex flex-col">
           <div className="scan-line" />
-          <div className="p-4 flex flex-col h-full overflow-hidden">
-            <div className="text-[10px] uppercase tracking-[1.5px] text-text-dim mb-4">Engine Output (JSON)</div>
-            
-            <div className="flex-1 grid grid-rows-2 gap-4 overflow-hidden">
-              {/* JSON View */}
-              <div className="bg-surface/30 rounded-lg border border-surface-accent p-4 font-mono text-[11px] overflow-hidden relative">
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(125,64,255,0.05),transparent)] pointer-events-none" />
-                <ScrollArea className="h-full">
-                  <pre className="whitespace-pre-wrap leading-relaxed">
-                    <span className="text-text-dim">{"{"}</span>{"\n"}
-                    {"  "}<span className="json-key">"project_title"</span>: <span className="json-string">"{project?.project_title || "Untitled"}"</span>,{"\n"}
-                    {"  "}<span className="json-key">"total_scenes"</span>: <span className="json-number">{project?.total_scenes || 0}</span>,{"\n"}
-                    {"  "}<span className="json-key">"scenes"</span>: <span className="text-text-dim">[</span>{"\n"}
-                    {project?.scenes.slice(0, 2).map((scene, i) => (
-                      <span key={i}>
-                        {"    "}<span className="text-text-dim">{"{"}</span>{"\n"}
-                        {"      "}<span className="json-key">"scene_id"</span>: <span className="json-number">{scene.scene_id}</span>,{"\n"}
-                        {"      "}<span className="json-key">"image_description"</span>: <span className="json-string">"{scene.image_description.substring(0, 40)}..."</span>,{"\n"}
-                        {"      "}<span className="json-key">"voiceover_text"</span>: <span className="json-string">"{scene.voiceover_text}"</span>,{"\n"}
-                        {"      "}<span className="json-key">"duration_seconds"</span>: <span className="json-number">3</span>{"\n"}
-                        {"    "}<span className="text-text-dim">{"}"}</span>{i === 0 ? "," : ""}{"\n"}
-                      </span>
-                    ))}
-                    {project && project.scenes.length > 2 && <span className="text-text-dim">    ...</span>}
-                    {"  "}<span className="text-text-dim">]</span>{"\n"}
-                    <span className="text-text-dim">{"}"}</span>
-                  </pre>
-                </ScrollArea>
-              </div>
+          
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
+            <div className="px-6 py-3 border-b border-surface-accent flex items-center justify-between bg-surface/30">
+              <TabsList className="bg-bg-deep border border-surface-accent">
+                <TabsTrigger value="player" className="data-[state=active]:bg-primary data-[state=active]:text-bg-deep text-[10px] uppercase tracking-widest gap-2">
+                  <MonitorPlay className="w-3 h-3" /> Master Preview
+                </TabsTrigger>
+                <TabsTrigger value="json" className="data-[state=active]:bg-primary data-[state=active]:text-bg-deep text-[10px] uppercase tracking-widest gap-2">
+                  <Code className="w-3 h-3" /> JSON Blueprint
+                </TabsTrigger>
+              </TabsList>
+              
+              {project && (
+                <div className="flex items-center gap-4">
+                  <div className="text-[10px] font-mono text-text-dim">SEED: <span className="text-primary">{project.seed}</span></div>
+                  <Button variant="ghost" size="sm" className="text-[10px] uppercase tracking-widest text-text-dim hover:text-primary" onClick={() => setProject(null)}>
+                    <RotateCcw className="w-3 h-3 mr-2" /> Reset
+                  </Button>
+                </div>
+              )}
+            </div>
 
-              {/* Player View */}
-              <div className="relative rounded-lg border border-surface-accent bg-black overflow-hidden group">
-                {project ? (
-                  <>
-                    <AnimatePresence mode="wait">
-                      <motion.img
-                        key={currentSceneIndex}
-                        src={currentScene?.image_url}
-                        alt={currentScene?.image_description}
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 0.6 }}
-                        exit={{ opacity: 0 }}
-                        className="w-full h-full object-cover"
-                        referrerPolicy="no-referrer"
-                      />
-                    </AnimatePresence>
-                    <div className="absolute inset-0 flex flex-col justify-between p-6">
-                      <div className="flex justify-between items-start">
-                        <div className="px-2 py-1 bg-black/80 border border-primary text-primary text-[9px] rounded uppercase">Scene {currentScene?.scene_id}</div>
-                        <div className="flex gap-2">
-                          <Button variant="ghost" size="icon" className="h-6 w-6 text-text-dim hover:text-primary" onClick={() => setIsPlaying(!isPlaying)}>
-                            {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                          </Button>
-                          <Button variant="ghost" size="icon" className="h-6 w-6 text-text-dim hover:text-primary" onClick={() => setProject(null)}>
-                            <RotateCcw className="w-4 h-4" />
-                          </Button>
+            <div className="flex-1 relative overflow-hidden">
+              <TabsContent value="player" className="absolute inset-0 m-0 flex flex-col p-6">
+                <div className="flex-1 relative rounded-xl border border-surface-accent bg-black overflow-hidden shadow-2xl group">
+                  {project ? (
+                    <>
+                      <AnimatePresence mode="wait">
+                        <motion.img
+                          key={currentSceneIndex}
+                          src={currentScene?.image_url}
+                          alt={currentScene?.image_description}
+                          initial={{ opacity: 0, scale: 1.05 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.95 }}
+                          transition={{ duration: 1, ease: "easeOut" }}
+                          className="w-full h-full object-cover opacity-70"
+                          referrerPolicy="no-referrer"
+                        />
+                      </AnimatePresence>
+                      
+                      <div className="absolute inset-0 flex flex-col justify-between p-8 bg-gradient-to-t from-black/80 via-transparent to-transparent">
+                        <div className="flex justify-between items-start">
+                          <div className="px-3 py-1.5 bg-black/80 border border-primary text-primary text-[10px] rounded uppercase font-mono tracking-widest">
+                            SCENE {currentScene?.scene_id} / {project.total_scenes}
+                          </div>
+                          <div className="flex gap-2">
+                            <Button variant="ghost" size="icon" className="h-10 w-10 text-white hover:text-primary bg-black/40 backdrop-blur-md rounded-full" onClick={() => setIsPlaying(!isPlaying)}>
+                              {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
+                            </Button>
+                          </div>
+                        </div>
+                        
+                        <div className="space-y-6">
+                          <motion.p 
+                            key={currentSceneIndex}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="text-xl font-serif italic text-text-main max-w-2xl leading-relaxed drop-shadow-lg"
+                          >
+                            "{currentScene?.voiceover_text}"
+                          </motion.p>
+                          
+                          <div className="flex items-center gap-4">
+                            <Button variant="ghost" size="icon" className="text-text-dim hover:text-primary" onClick={prevScene} disabled={currentSceneIndex === 0}>
+                              <ChevronLeft className="w-5 h-5" />
+                            </Button>
+                            <div className="flex-1 h-[2px] bg-surface-accent relative overflow-hidden rounded-full">
+                              {isPlaying && (
+                                <motion.div 
+                                  className="absolute top-0 left-0 h-full bg-primary shadow-[0_0_10px_var(--color-primary)]"
+                                  initial={{ width: 0 }}
+                                  animate={{ width: "100%" }}
+                                  key={currentSceneIndex}
+                                  transition={{ 
+                                    duration: currentScene?.duration_seconds || 3, 
+                                    ease: "linear" 
+                                  }}
+                                />
+                              )}
+                            </div>
+                            <Button variant="ghost" size="icon" className="text-text-dim hover:text-primary" onClick={nextScene} disabled={currentSceneIndex === project.total_scenes - 1}>
+                              <ChevronRight className="w-5 h-5" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="text-text-dim hover:text-primary" onClick={() => setIsMuted(!isMuted)}>
+                              {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+                            </Button>
+                          </div>
                         </div>
                       </div>
-                      <div className="space-y-4">
-                        <p className="text-sm font-serif italic text-text-main max-w-xl leading-relaxed">
-                          "{currentScene?.voiceover_text}"
-                        </p>
-                        <div className="h-[2px] w-full bg-surface-accent relative overflow-hidden">
-                          <motion.div 
-                            className="absolute top-0 left-0 h-full bg-primary shadow-[0_0_10px_var(--color-primary)]"
-                            initial={{ width: 0 }}
-                            animate={{ width: `${progress}%` }}
-                            transition={{ duration: 0.05, ease: "linear" }}
-                          />
-                        </div>
+                    </>
+                  ) : (
+                    <div className="h-full flex flex-col items-center justify-center text-text-dim gap-6">
+                      <div className="w-20 h-20 border-2 border-surface-accent rounded-full flex items-center justify-center animate-pulse">
+                        <Film className="w-10 h-10 opacity-20" />
+                      </div>
+                      <div className="text-center space-y-2">
+                        <p className="text-[12px] uppercase tracking-[4px] opacity-30">Awaiting Narrative Input</p>
+                        <p className="text-[10px] font-mono opacity-20">SYSTEM_IDLE // STANDBY_MODE</p>
                       </div>
                     </div>
-                  </>
-                ) : (
-                  <div className="h-full flex flex-col items-center justify-center text-text-dim gap-4">
-                    <Film className="w-12 h-12 opacity-10" />
-                    <p className="text-[10px] uppercase tracking-widest opacity-30">Awaiting Narrative Input</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </section>
-      </main>
+                  )}
+                </div>
+              </TabsContent>
 
-      {/* Footer: Timeline */}
-      <footer className="h-[220px] bg-surface border-t border-surface-accent p-5 shrink-0 overflow-hidden">
-        <div className="text-[10px] uppercase tracking-[1.5px] text-text-dim mb-4">Production Pipeline Preview</div>
+              <TabsContent value="json" className="absolute inset-0 m-0 p-6">
+                <div className="h-full bg-surface/30 rounded-xl border border-surface-accent p-6 font-mono text-[12px] relative overflow-hidden">
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(125,64,255,0.05),transparent)] pointer-events-none" />
+                  <ScrollArea className="h-full">
+                    <pre className="whitespace-pre-wrap leading-relaxed">
+                      {project ? JSON.stringify(project, null, 2).split('\n').map((line, i) => {
+                        if (line.includes('":')) {
+                          const [key, value] = line.split('":');
+                          return (
+                            <div key={i}>
+                              <span className="json-key">{key}"</span>:
+                              <span className={value.includes('"') ? 'json-string' : 'json-number'}>{value}</span>
+                            </div>
+                          );
+                        }
+                        return <div key={i} className="text-text-dim">{line}</div>;
+                      }) : <div className="text-text-dim opacity-30 italic">// No project data generated yet...</div>}
+                    </pre>
+                  </ScrollArea>
+                </div>
+              </TabsContent>
+            </div>
+          </Tabs>
+        </main>
+      </div>
+
+      {/* BOTTOM: Timeline */}
+      <footer className="h-[200px] bg-surface border-t border-surface-accent p-5 shrink-0 overflow-hidden">
+        <div className="flex items-center justify-between mb-4">
+          <div className="text-[10px] uppercase tracking-[1.5px] text-text-dim">Production Timeline</div>
+          {project && <div className="text-[9px] font-mono text-text-dim uppercase">Visual Anchor: <span className="text-primary">{project.visual_anchor}</span></div>}
+        </div>
         <ScrollArea className="w-full">
-          <div className="flex gap-5 pb-4">
+          <div className="flex gap-4 pb-4">
             {project ? (
               project.scenes.map((scene, idx) => (
                 <button
                   key={scene.scene_id}
                   onClick={() => {
                     setCurrentSceneIndex(idx);
-                    setProgress(0);
                     setIsPlaying(true);
                   }}
                   className={cn(
-                    "min-w-[200px] bg-bg-deep rounded-md border overflow-hidden transition-all text-left",
-                    currentSceneIndex === idx ? "border-primary" : "border-surface-accent"
+                    "min-w-[240px] bg-bg-deep rounded-lg border overflow-hidden transition-all text-left group relative",
+                    currentSceneIndex === idx ? "border-primary ring-1 ring-primary/20" : "border-surface-accent hover:border-text-dim/30"
                   )}
                 >
-                  <div className="h-[100px] bg-[#111] relative">
-                    <img src={scene.image_url} className="w-full h-full object-cover opacity-60" referrerPolicy="no-referrer" />
-                    <div className="absolute top-2 left-2 bg-black/80 border border-primary text-primary text-[9px] px-1.5 py-0.5 rounded">SCENE {scene.scene_id}</div>
-                    {currentSceneIndex === idx && (
-                      <div className="absolute bottom-0 left-0 h-[3px] bg-primary" style={{ width: `${progress}%` }} />
+                  <div className="h-[100px] bg-[#111] relative overflow-hidden">
+                    <img src={scene.image_url} className="w-full h-full object-cover opacity-50 group-hover:opacity-70 transition-opacity" referrerPolicy="no-referrer" />
+                    <div className="absolute top-2 left-2 bg-black/80 border border-primary text-primary text-[9px] px-2 py-0.5 rounded font-mono">#{scene.scene_id}</div>
+                    {currentSceneIndex === idx && isPlaying && (
+                      <div className="absolute bottom-0 left-0 w-full h-1 bg-primary/20">
+                        <motion.div 
+                          className="h-full bg-primary"
+                          initial={{ width: 0 }}
+                          animate={{ width: "100%" }}
+                          key={currentSceneIndex}
+                          transition={{ duration: scene.duration_seconds || 3, ease: "linear" }}
+                        />
+                      </div>
                     )}
                   </div>
-                  <div className="p-3">
-                    <p className="text-[11px] text-text-dim line-clamp-2 italic leading-tight">"{scene.voiceover_text}"</p>
+                  <div className="p-3 bg-surface/50">
+                    <p className="text-[10px] text-text-dim line-clamp-2 italic leading-tight group-hover:text-text-main transition-colors">"{scene.voiceover_text}"</p>
                   </div>
                 </button>
               ))
             ) : (
-              Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="min-w-[200px] bg-bg-deep rounded-md border border-surface-accent h-[150px] flex flex-col opacity-20">
-                  <div className="h-[100px] bg-[#111] flex items-center justify-center text-[10px] text-zinc-800">[FRAME_DATA]</div>
-                  <div className="p-3 bg-bg-deep flex-1" />
+              Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="min-w-[240px] bg-bg-deep rounded-lg border border-surface-accent h-[140px] flex flex-col opacity-10">
+                  <div className="h-[100px] bg-[#111] flex items-center justify-center text-[10px]">[FRAME_WAIT]</div>
+                  <div className="p-3 flex-1" />
                 </div>
               ))
             )}
@@ -267,14 +302,21 @@ export default function App() {
         </ScrollArea>
       </footer>
 
-      {/* Global Audio */}
+      {/* Global Audio Engine */}
       {currentScene && isPlaying && (
         <audio
           ref={audioRef}
+          key={currentSceneIndex}
           src={currentScene.voiceover_audio_url}
           autoPlay
           muted={isMuted}
-          onEnded={() => {}}
+          crossOrigin="anonymous"
+          onEnded={nextScene}
+          onError={(e) => {
+            console.error("Audio playback error:", e);
+            // Fallback to timer if audio fails
+            setTimeout(nextScene, 3000);
+          }}
         />
       )}
     </div>

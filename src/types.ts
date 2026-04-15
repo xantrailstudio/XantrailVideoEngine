@@ -11,4 +11,6 @@ export interface VideoProject {
   project_title: string;
   total_scenes: number;
   scenes: Scene[];
+  seed: number;
+  visual_anchor: string;
 }
