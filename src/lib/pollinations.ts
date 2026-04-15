@@ -3,12 +3,13 @@ import { VideoProject } from "../types";
 const SYSTEM_PROMPT = `You are the "Zyntros" Director. Your job is to take a story input from the user and convert it into a strictly structured JSON format that drives a video production pipeline.
 
 ### YOUR RULES:
-1. OUTPUT ONLY JSON. No conversational text, no markdown code blocks.
-2. BREAK THE STORY into logical scenes.
-3. VISUAL ANCHOR SYSTEM: 
-   - First, define a "visual_anchor" string that describes the main character's consistent appearance (e.g., "A young woman with neon blue bob hair, wearing a silver reflective jacket and a glowing visor").
-   - Every "image_description" in the "scenes" array MUST start with this visual anchor to maintain character consistency.
-4. Each scene must have a vivid visual description and a narration script.
+1. OUTPUT ONLY THE RAW JSON OBJECT. 
+2. DO NOT INCLUDE ANY REASONING, EXPLANATIONS, OR CONVERSATIONAL TEXT.
+3. DO NOT USE MARKDOWN CODE BLOCKS.
+4. BREAK THE STORY into logical scenes.
+5. VISUAL ANCHOR SYSTEM: 
+   - First, define a "visual_anchor" string that describes the main character's consistent appearance.
+   - Every "image_description" in the "scenes" array MUST start with this visual anchor.
 
 ### THE JSON STRUCTURE:
 {
@@ -19,15 +20,14 @@ const SYSTEM_PROMPT = `You are the "Zyntros" Director. Your job is to take a sto
     {
       "scene_id": 1,
       "image_description": "Visual Anchor + specific scene action/setting",
-      "voiceover_text": "The narration script",
+      "voiceover_text": "The narration script (10-15 words)",
       "duration_seconds": 3
     }
   ]
 }
 
-### CRITICAL INSTRUCTIONS:
-- Keep the voiceover_text short enough to be spoken clearly (about 10-15 words).
-- DO NOT include any markdown formatting like \`\`\`json. Just raw JSON.`;
+### CRITICAL:
+If you include any text other than the JSON object, the system will fail. Start your response with "{" and end it with "}".`;
 
 export async function generateVideoProject(story: string): Promise<VideoProject> {
   const projectSeed = Math.floor(Math.random() * 1000000);
@@ -40,7 +40,7 @@ export async function generateVideoProject(story: string): Promise<VideoProject>
     body: JSON.stringify({
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: `Story: ${story}` }
+        { role: "user", content: `Generate the Zyntros JSON for this story: ${story}. Remember: ONLY JSON.` }
       ],
       model: "openai",
       jsonMode: true
@@ -55,40 +55,65 @@ export async function generateVideoProject(story: string): Promise<VideoProject>
   let jsonString = rawText;
   
   try {
-    // 1. Try to parse the entire response as JSON (it might be a structured response)
     const parsedResponse = JSON.parse(rawText);
-    
-    // 2. Extract content from standard formats
     if (parsedResponse.content) {
       jsonString = parsedResponse.content;
     } else if (parsedResponse.choices?.[0]?.message?.content) {
       jsonString = parsedResponse.choices[0].message.content;
-    } else if (typeof parsedResponse === 'object' && !parsedResponse.project_title) {
-      // If it's an object but doesn't look like our project, it might be a wrapper we don't recognize
-      // We'll stick with rawText and try to extract JSON from it below
-      jsonString = rawText;
+    } else if (parsedResponse.reasoning_content && !parsedResponse.content) {
+      // If the model put everything in reasoning_content
+      jsonString = parsedResponse.reasoning_content;
     }
   } catch (e) {
-    // Not a JSON response, treat as raw text
     jsonString = rawText;
   }
 
   try {
-    // 3. Clean markdown and extract the JSON block
-    let cleanJson = jsonString.replace(/```json|```/g, "").trim();
+    // Advanced JSON extraction: find the block containing project_title
+    let cleanJson = jsonString;
+    const firstBrace = jsonString.indexOf('{');
+    const lastBrace = jsonString.lastIndexOf('}');
     
-    // 4. Find the first '{' and last '}' to handle cases where AI adds reasoning outside the block
-    const firstBrace = cleanJson.indexOf('{');
-    const lastBrace = cleanJson.lastIndexOf('}');
     if (firstBrace !== -1 && lastBrace !== -1) {
-      cleanJson = cleanJson.substring(firstBrace, lastBrace + 1);
+      // Try to find a block that specifically contains our required keys
+      const potentialBlocks = [];
+      let searchPos = 0;
+      while (true) {
+        const start = jsonString.indexOf('{', searchPos);
+        if (start === -1) break;
+        
+        // Find matching closing brace
+        let depth = 0;
+        let end = -1;
+        for (let i = start; i < jsonString.length; i++) {
+          if (jsonString[i] === '{') depth++;
+          else if (jsonString[i] === '}') depth--;
+          if (depth === 0) {
+            end = i;
+            break;
+          }
+        }
+        
+        if (end !== -1) {
+          potentialBlocks.push(jsonString.substring(start, end + 1));
+          searchPos = end + 1;
+        } else {
+          break;
+        }
+      }
+      
+      const validBlock = potentialBlocks.find(b => b.includes('"project_title"') && b.includes('"scenes"'));
+      if (validBlock) {
+        cleanJson = validBlock;
+      } else {
+        cleanJson = jsonString.substring(firstBrace, lastBrace + 1);
+      }
     }
 
-    const project = JSON.parse(cleanJson) as VideoProject;
+    const project = JSON.parse(cleanJson.replace(/```json|```/g, "").trim()) as VideoProject;
     
     project.seed = projectSeed;
 
-    // Post-process to ensure URLs are correctly encoded and include the seed
     project.scenes = project.scenes.map(scene => {
       const fullPrompt = `${scene.image_description}, cinematic lighting, 8k, hyper-realistic`;
       const encodedDesc = encodeURIComponent(fullPrompt);
@@ -104,7 +129,7 @@ export async function generateVideoProject(story: string): Promise<VideoProject>
 
     return project;
   } catch (e) {
-    console.error("Failed to parse JSON from Pollinations. Raw:", rawText, "Extracted:", jsonString);
-    throw new Error("The AI engine returned an invalid response format. Please try again.");
+    console.error("Failed to parse JSON from Pollinations. Raw:", rawText);
+    throw new Error("The AI engine failed to generate a valid project structure. Please try a different story or try again.");
   }
 }
