@@ -51,10 +51,39 @@ export async function generateVideoProject(story: string): Promise<VideoProject>
     throw new Error(`Pollinations API error: ${response.statusText}`);
   }
 
-  const text = await response.text();
+  const rawText = await response.text();
+  let jsonString = rawText;
   
   try {
-    const cleanJson = text.replace(/```json|```/g, "").trim();
+    // 1. Try to parse the entire response as JSON (it might be a structured response)
+    const parsedResponse = JSON.parse(rawText);
+    
+    // 2. Extract content from standard formats
+    if (parsedResponse.content) {
+      jsonString = parsedResponse.content;
+    } else if (parsedResponse.choices?.[0]?.message?.content) {
+      jsonString = parsedResponse.choices[0].message.content;
+    } else if (typeof parsedResponse === 'object' && !parsedResponse.project_title) {
+      // If it's an object but doesn't look like our project, it might be a wrapper we don't recognize
+      // We'll stick with rawText and try to extract JSON from it below
+      jsonString = rawText;
+    }
+  } catch (e) {
+    // Not a JSON response, treat as raw text
+    jsonString = rawText;
+  }
+
+  try {
+    // 3. Clean markdown and extract the JSON block
+    let cleanJson = jsonString.replace(/```json|```/g, "").trim();
+    
+    // 4. Find the first '{' and last '}' to handle cases where AI adds reasoning outside the block
+    const firstBrace = cleanJson.indexOf('{');
+    const lastBrace = cleanJson.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1) {
+      cleanJson = cleanJson.substring(firstBrace, lastBrace + 1);
+    }
+
     const project = JSON.parse(cleanJson) as VideoProject;
     
     project.seed = projectSeed;
@@ -75,7 +104,7 @@ export async function generateVideoProject(story: string): Promise<VideoProject>
 
     return project;
   } catch (e) {
-    console.error("Failed to parse JSON from Pollinations:", text);
+    console.error("Failed to parse JSON from Pollinations. Raw:", rawText, "Extracted:", jsonString);
     throw new Error("The AI engine returned an invalid response format. Please try again.");
   }
 }
