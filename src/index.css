@@ -1,0 +1,48 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", sans-serif;
+  --font-serif: "Playfair Display", serif;
+  --font-mono: "Courier New", Courier, monospace;
+
+  --color-bg-deep: #050508;
+  --color-surface: #0f0f14;
+  --color-surface-accent: #1a1a24;
+  --color-primary: #00f2ff;
+  --color-secondary: #7d40ff;
+  --color-text-main: #e0e0e6;
+  --color-text-dim: #8e8e9c;
+  --color-glow: rgba(0, 242, 255, 0.15);
+}
+
+@layer base {
+  body {
+    @apply bg-bg-deep text-text-main font-sans antialiased;
+  }
+}
+
+@layer utilities {
+  .scan-line {
+    @apply absolute top-0 left-0 w-full h-[2px] bg-primary opacity-30;
+    box-shadow: 0 0 15px var(--color-primary);
+    animation: scan 4s linear infinite;
+  }
+
+  @keyframes scan {
+    0% { transform: translateY(0); }
+    100% { transform: translateY(100vh); }
+  }
+
+  .json-key { @apply text-primary; }
+  .json-string { @apply text-[#f9d423]; }
+  .json-number { @apply text-[#ff6e6e]; }
+
+  .glow-primary {
+    box-shadow: 0 0 20px var(--color-glow);
+  }
+}
+
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
