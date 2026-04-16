@@ -14,7 +14,12 @@ import {
   Volume2,
   VolumeX,
   Code,
-  MonitorPlay
+  MonitorPlay,
+  CloudUpload,
+  CloudDownload,
+  LogIn,
+  LogOut,
+  AlertTriangle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -23,6 +28,26 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { generateVideoProject } from "@/lib/pollinations";
 import { VideoProject, Scene } from "@/types";
 import { cn } from "@/lib/utils";
+import { auth, db } from "@/lib/firebase";
+import { 
+  GoogleAuthProvider, 
+  signInWithPopup, 
+  signOut, 
+  onAuthStateChanged,
+  User
+} from "firebase/auth";
+import { 
+  collection, 
+  addDoc, 
+  query, 
+  where, 
+  getDocs, 
+  serverTimestamp,
+  Timestamp,
+  doc,
+  setDoc
+} from "firebase/firestore";
+import { useEffect } from "react";
 
 export default function App() {
   const [story, setStory] = useState("");
@@ -35,8 +60,130 @@ export default function App() {
   const [isMuted, setIsMuted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("player");
+  const [user, setUser] = useState<User | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isLoadingCloud, setIsLoadingCloud] = useState(false);
+  const [isExpired, setIsExpired] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleLogin = async () => {
+    try {
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+    } catch (err) {
+      console.error("Login failed", err);
+      setError("Login failed. Please try again.");
+    }
+  };
+
+  const handleLogout = () => signOut(auth);
+
+  const handleSaveToCloud = async () => {
+    if (!project || !user) return;
+    
+    const projectName = prompt("Enter a unique name for this project:");
+    if (!projectName) return;
+
+    setIsSaving(true);
+    setError(null);
+
+    try {
+      // 1. Check if project name already exists
+      const q = query(collection(db, "projects"), where("projectName", "==", projectName));
+      const querySnapshot = await getDocs(q);
+      if (!querySnapshot.empty) {
+        throw new Error("Project name already exists. Please choose another.");
+      }
+
+      // 2. Upload images to Vercel Blob via our API
+      const blobRes = await fetch("/api/save-images", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scenes: project.scenes, projectName }),
+      });
+
+      if (!blobRes.ok) throw new Error("Failed to upload images to cloud storage.");
+      const { scenes: cloudScenes } = await blobRes.json();
+
+      // 3. Save metadata to Firestore
+      await addDoc(collection(db, "projects"), {
+        projectName,
+        story: project.story,
+        visualAnchor: project.visual_anchor,
+        seed: project.seed,
+        scenes: cloudScenes,
+        createdAt: serverTimestamp(),
+        ownerUid: user.uid,
+        imagesDeleted: false
+      });
+
+      alert("Project saved successfully to cloud!");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save project");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleLoadFromCloud = async () => {
+    const projectName = prompt("Enter the project name to load:");
+    if (!projectName) return;
+
+    setIsLoadingCloud(true);
+    setError(null);
+    setIsExpired(false);
+
+    try {
+      const q = query(collection(db, "projects"), where("projectName", "==", projectName));
+      const querySnapshot = await getDocs(q);
+
+      if (querySnapshot.empty) {
+        throw new Error("Project not found.");
+      }
+
+      const docData = querySnapshot.docs[0].data();
+      const createdAt = (docData.createdAt as Timestamp).toDate();
+      const now = new Date();
+      const diffDays = Math.floor((now.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24));
+
+      const loadedProject: VideoProject = {
+        project_title: docData.projectName,
+        story: docData.story,
+        visual_anchor: docData.visualAnchor,
+        seed: docData.seed,
+        total_scenes: docData.scenes.length,
+        scenes: docData.scenes
+      };
+
+      if (diffDays >= 7) {
+        setIsExpired(true);
+        // Mark as deleted in DB if not already
+        if (!docData.imagesDeleted) {
+          await setDoc(doc(db, "projects", querySnapshot.docs[0].id), { imagesDeleted: true }, { merge: true });
+        }
+      }
+
+      setProject(loadedProject);
+      setCurrentSceneIndex(0);
+      setActiveTab("player");
+      
+      if (diffDays < 7) {
+        await preloadAssets(loadedProject.scenes);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load project");
+    } finally {
+      setIsLoadingCloud(false);
+    }
+  };
 
   const preloadAssets = async (scenes: Scene[]) => {
     setIsBuffering(true);
@@ -131,8 +278,30 @@ export default function App() {
           <img src="/Zyntros_logo.png" alt="Zyntros Logo" className="w-8 h-8 object-contain" referrerPolicy="no-referrer" />
           <h1 className="font-display font-extrabold text-xs md:text-sm tracking-[2px] uppercase text-primary">ZYNTROS</h1>
         </div>
-        <div className="hidden md:block text-[10px] font-mono text-text-dim uppercase tracking-wider">
-          ENGINE: <span className="text-primary">POLLINATIONS AI</span> &nbsp; | &nbsp; STATUS: <span className="text-[#00ff41]">READY</span>
+        
+        <div className="flex items-center gap-4">
+          <div className="hidden md:flex items-center gap-4 text-[10px] font-mono text-text-dim uppercase tracking-wider mr-4">
+            ENGINE: <span className="text-primary">POLLINATIONS AI</span> &nbsp; | &nbsp; STATUS: <span className="text-[#00ff41]">READY</span>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            {user ? (
+              <div className="flex items-center gap-3">
+                <div className="hidden sm:block text-right">
+                  <div className="text-[10px] font-bold text-text-main leading-none">{user.displayName}</div>
+                  <div className="text-[8px] text-text-dim leading-none mt-1 uppercase tracking-tighter">DIRECTOR</div>
+                </div>
+                <img src={user.photoURL || ""} alt="User" className="w-8 h-8 rounded-full border border-primary/30" />
+                <Button variant="ghost" size="icon" onClick={handleLogout} className="text-text-dim hover:text-red-400">
+                  <LogOut className="w-4 h-4" />
+                </Button>
+              </div>
+            ) : (
+              <Button onClick={handleLogin} variant="outline" size="sm" className="border-primary/30 text-primary hover:bg-primary/10 text-[10px] uppercase tracking-widest h-8">
+                <LogIn className="w-3 h-3 mr-2" /> Login
+              </Button>
+            )}
+          </div>
         </div>
       </header>
 
@@ -149,17 +318,40 @@ export default function App() {
             value={story}
             onChange={(e) => setStory(e.target.value)}
           />
-          <Button 
-            onClick={handleGenerate} 
-            disabled={isGenerating || !story.trim()}
-            className="bg-primary hover:bg-primary/80 text-bg-deep font-bold text-[12px] uppercase tracking-wider h-10 md:h-12 rounded shadow-[0_0_15px_var(--color-primary)] transition-all active:scale-95"
-          >
-            {isGenerating ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              "Initialize Engine"
-            )}
-          </Button>
+          
+          <div className="grid grid-cols-1 gap-2">
+            <Button 
+              onClick={handleGenerate} 
+              disabled={isGenerating || !story.trim()}
+              className="bg-primary hover:bg-primary/80 text-bg-deep font-bold text-[12px] uppercase tracking-wider h-10 md:h-12 rounded shadow-[0_0_15px_var(--color-primary)] transition-all active:scale-95"
+            >
+              {isGenerating ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                "Initialize Engine"
+              )}
+            </Button>
+
+            <div className="grid grid-cols-2 gap-2">
+              <Button 
+                onClick={handleSaveToCloud}
+                disabled={!project || !user || isSaving}
+                variant="outline"
+                className="border-surface-accent text-text-dim hover:text-primary hover:border-primary/50 text-[10px] uppercase tracking-widest h-10"
+              >
+                {isSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <><CloudUpload className="w-3 h-3 mr-2" /> Save</>}
+              </Button>
+              <Button 
+                onClick={handleLoadFromCloud}
+                disabled={isLoadingCloud}
+                variant="outline"
+                className="border-surface-accent text-text-dim hover:text-primary hover:border-primary/50 text-[10px] uppercase tracking-widest h-10"
+              >
+                {isLoadingCloud ? <Loader2 className="w-3 h-3 animate-spin" /> : <><CloudDownload className="w-3 h-3 mr-2" /> Load</>}
+              </Button>
+            </div>
+          </div>
+          
           {error && <p className="text-red-500 text-[10px] font-mono bg-red-500/10 p-2 rounded border border-red-500/20">{error}</p>}
         </aside>
 
@@ -181,7 +373,7 @@ export default function App() {
               {project && (
                 <div className="flex items-center gap-4">
                   <div className="text-[10px] font-mono text-text-dim">SEED: <span className="text-primary">{project.seed}</span></div>
-                  <Button variant="ghost" size="sm" className="text-[10px] uppercase tracking-widest text-text-dim hover:text-primary" onClick={() => setProject(null)}>
+                  <Button variant="ghost" size="sm" className="text-[10px] uppercase tracking-widest text-text-dim hover:text-primary" onClick={() => { setProject(null); setIsExpired(false); }}>
                     <RotateCcw className="w-3 h-3 mr-2" /> Reset
                   </Button>
                 </div>
@@ -191,6 +383,22 @@ export default function App() {
             <div className="flex-1 relative overflow-hidden">
               <TabsContent value="player" className="absolute inset-0 m-0 flex flex-col p-6">
                 <div className="flex-1 relative rounded-xl border border-surface-accent bg-black overflow-hidden shadow-2xl group">
+                  {isExpired && (
+                    <div className="absolute inset-0 z-50 bg-black/90 backdrop-blur-md flex flex-col items-center justify-center gap-4 p-8 text-center">
+                      <div className="w-16 h-16 bg-red-500/10 border border-red-500/30 rounded-full flex items-center justify-center">
+                        <AlertTriangle className="w-8 h-8 text-red-500" />
+                      </div>
+                      <div className="space-y-2">
+                        <h3 className="text-red-500 font-display font-bold uppercase tracking-widest">Project Images Deleted</h3>
+                        <p className="text-text-dim text-xs max-w-xs mx-auto">
+                          Cloud storage for this project has expired (7+ days). The narrative metadata is preserved, but visual assets have been purged.
+                        </p>
+                      </div>
+                      <Button onClick={() => setIsExpired(false)} variant="outline" className="border-red-500/30 text-red-500 hover:bg-red-500/10 text-[10px] uppercase tracking-widest">
+                        Dismiss Warning
+                      </Button>
+                    </div>
+                  )}
                   {(isBuffering || isGenerating) && (
                     <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center gap-4">
                       <div className="relative w-20 h-20 flex items-center justify-center">

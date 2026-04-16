@@ -13,4 +13,5 @@ export interface VideoProject {
   scenes: Scene[];
   seed: number;
   visual_anchor: string;
+  story: string;
 }

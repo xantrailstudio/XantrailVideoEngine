@@ -110,6 +110,7 @@ export async function generateVideoProject(story: string): Promise<VideoProject>
     const project = JSON.parse(cleanJson.replace(/```json|```/g, "").trim()) as VideoProject;
     
     project.seed = projectSeed;
+    project.story = story;
 
     project.scenes = project.scenes.map(scene => {
       const fullPrompt = `${scene.image_description}, cinematic lighting, 8k, hyper-realistic`;
