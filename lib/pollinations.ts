@@ -32,102 +32,34 @@ If you include any text other than the JSON object, the system will fail. Start 
 export async function generateVideoProject(story: string): Promise<VideoProject> {
   const projectSeed = Math.floor(Math.random() * 1000000);
   
-  const response = await fetch("https://text.pollinations.ai/", {
+  const response = await fetch("/api/generate", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${process.env.NEXT_PUBLIC_POLLINATIONS_API_KEY}`
     },
-    body: JSON.stringify({
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: `Generate the Zyntros JSON for this story: ${story}. Remember: ONLY JSON.` }
-      ],
-      model: "openai",
-      jsonMode: true
-    }),
+    body: JSON.stringify({ story }),
   });
 
   if (!response.ok) {
-    throw new Error(`Pollinations API error: ${response.statusText}`);
+    throw new Error(`Generation error: ${response.statusText}`);
   }
 
-  const rawText = await response.text();
-  let jsonString = rawText;
+  const project = await response.json() as VideoProject;
   
-  try {
-    const parsedResponse = JSON.parse(rawText);
-    if (parsedResponse.content) {
-      jsonString = parsedResponse.content;
-    } else if (parsedResponse.choices?.[0]?.message?.content) {
-      jsonString = parsedResponse.choices[0].message.content;
-    } else if (parsedResponse.reasoning_content && !parsedResponse.content) {
-      jsonString = parsedResponse.reasoning_content;
-    }
-  } catch (e) {
-    jsonString = rawText;
-  }
+  project.seed = projectSeed;
+  project.story = story;
 
-  try {
-    let cleanJson = jsonString;
-    const firstBrace = jsonString.indexOf('{');
-    const lastBrace = jsonString.lastIndexOf('}');
+  project.scenes = project.scenes.map(scene => {
+    const fullPrompt = `${scene.image_description}, cinematic lighting, 8k, hyper-realistic`;
+    const encodedDesc = encodeURIComponent(fullPrompt);
     
-    if (firstBrace !== -1 && lastBrace !== -1) {
-      const potentialBlocks = [];
-      let searchPos = 0;
-      while (true) {
-        const start = jsonString.indexOf('{', searchPos);
-        if (start === -1) break;
-        
-        let depth = 0;
-        let end = -1;
-        for (let i = start; i < jsonString.length; i++) {
-          if (jsonString[i] === '{') depth++;
-          else if (jsonString[i] === '}') depth--;
-          if (depth === 0) {
-            end = i;
-            break;
-          }
-        }
-        
-        if (end !== -1) {
-          potentialBlocks.push(jsonString.substring(start, end + 1));
-          searchPos = end + 1;
-        } else {
-          break;
-        }
-      }
-      
-      const validBlock = potentialBlocks.find(b => b.includes('"project_title"') && b.includes('"scenes"'));
-      if (validBlock) {
-        cleanJson = validBlock;
-      } else {
-        cleanJson = jsonString.substring(firstBrace, lastBrace + 1);
-      }
-    }
+    return {
+      ...scene,
+      image_url: `https://image.pollinations.ai/prompt/${encodedDesc}?width=1280&height=720&model=flux&seed=${projectSeed}&nologo=true`,
+      voiceover_audio_url: `/api/audio?text=${encodeURIComponent(scene.voiceover_text)}`,
+      duration_seconds: scene.duration_seconds || 3
+    };
+  });
 
-    const project = JSON.parse(cleanJson.replace(/```json|```/g, "").trim()) as VideoProject;
-    
-    project.seed = projectSeed;
-    project.story = story;
-
-    project.scenes = project.scenes.map(scene => {
-      const fullPrompt = `${scene.image_description}, cinematic lighting, 8k, hyper-realistic`;
-      const encodedDesc = encodeURIComponent(fullPrompt);
-      const encodedVO = encodeURIComponent(scene.voiceover_text);
-      
-      return {
-        ...scene,
-        image_url: `https://image.pollinations.ai/prompt/${encodedDesc}?width=1280&height=720&model=flux&seed=${projectSeed}&nologo=true`,
-        voiceover_audio_url: `https://text.pollinations.ai/audio/${encodedVO}`,
-        duration_seconds: scene.duration_seconds || 3
-      };
-    });
-
-    return project;
-  } catch (e) {
-    console.error("Failed to parse JSON from Pollinations. Raw:", rawText);
-    throw new Error("The AI engine failed to generate a valid project structure. Please try a different story or try again.");
-  }
+  return project;
 }

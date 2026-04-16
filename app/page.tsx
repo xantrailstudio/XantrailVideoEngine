@@ -105,7 +105,7 @@ export default function App() {
       }
 
       // 2. Upload images to Vercel Blob via our API
-      const blobRes = await fetch("/api/save-images", {
+      const blobRes = await fetch("/api/save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ scenes: project.scenes, projectName }),
