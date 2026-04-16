@@ -64,6 +64,7 @@ export default function App() {
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingCloud, setIsLoadingCloud] = useState(false);
   const [isExpired, setIsExpired] = useState(false);
+  const [showInputOnMobile, setShowInputOnMobile] = useState(true);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -174,6 +175,7 @@ export default function App() {
       setProject(loadedProject);
       setCurrentSceneIndex(0);
       setActiveTab("player");
+      setShowInputOnMobile(false);
       
       if (diffDays < 7) {
         await preloadAssets(loadedProject.scenes);
@@ -236,6 +238,7 @@ export default function App() {
     setIsBuffering(true);
     setBufferProgress(0);
     setError(null);
+    setShowInputOnMobile(false);
     try {
       const result = await generateVideoProject(story);
       setProject(result);
@@ -245,9 +248,11 @@ export default function App() {
       
       setIsPlaying(true);
       setActiveTab("player");
+      setShowInputOnMobile(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to generate project");
       setIsBuffering(false);
+      setShowInputOnMobile(true);
     } finally {
       setIsGenerating(false);
     }
@@ -285,6 +290,16 @@ export default function App() {
           </div>
           
           <div className="flex items-center gap-2">
+            {project && !showInputOnMobile && (
+              <Button 
+                onClick={() => setShowInputOnMobile(true)} 
+                variant="ghost" 
+                size="sm" 
+                className="md:hidden text-primary text-[10px] uppercase tracking-widest"
+              >
+                <Sparkles className="w-3 h-3 mr-2" /> New
+              </Button>
+            )}
             {user ? (
               <div className="flex items-center gap-3">
                 <div className="hidden sm:block text-right">
@@ -307,7 +322,10 @@ export default function App() {
 
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
         {/* TOP LEFT: Short Sidebar */}
-        <aside className="w-full md:w-[320px] border-b md:border-b-0 md:border-r border-surface-accent bg-bg-deep p-4 md:p-6 flex flex-col gap-4 shrink-0 max-h-[40%] md:max-h-none">
+        <aside className={cn(
+          "w-full md:w-[320px] border-b md:border-b-0 md:border-r border-surface-accent bg-bg-deep p-4 md:p-6 flex flex-col gap-4 shrink-0 max-h-[40%] md:max-h-none transition-all duration-300",
+          !showInputOnMobile && "hidden md:flex"
+        )}>
           <div className="flex items-center justify-between">
             <div className="text-[10px] uppercase tracking-[1.5px] text-text-dim">Narrative Input</div>
             <Sparkles className="w-3 h-3 text-primary opacity-50" />
@@ -356,7 +374,10 @@ export default function App() {
         </aside>
 
         {/* TOP RIGHT: Main Stage */}
-        <main className="flex-1 bg-[#08080a] relative overflow-hidden flex flex-col">
+        <main className={cn(
+          "flex-1 bg-[#08080a] relative overflow-hidden flex flex-col transition-all duration-300",
+          showInputOnMobile && "hidden md:flex"
+        )}>
           <div className="scan-line" />
           
           <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
